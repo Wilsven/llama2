@@ -30,7 +30,7 @@ def precompute_theta_pos_frequencies(
 ) -> torch.Tensor:
     # Assert that the `head_dim` is even because rotary positional embedding cannot
     # be applied to embeddings with odd number of dimensions (as written in the paper)
-    assert head_dim % 2 == 0, "Dimension must be even"
+    assert head_dim % 2 == 0, "Number of dimensions must be even"
 
     # Compute theta parameters according to the formula in the paper:
     # theta_i = 10000 ^ (-2 * (i - 1) / d) for i = [1, 2, ..., d/2]
@@ -98,7 +98,7 @@ def repeat_kv(x: torch.Tensor, n_rep: int) -> torch.Tensor:
             x[:, :, :, None, :]
             .expand(
                 batch_size, seq_len, n_kv_heads, n_rep, head_dim
-            )  # repeat along the new dimension n_rep times
+            )  # repeat along the new dimension `n_rep` times
             .reshape(batch_size, seq_len, n_kv_heads * n_rep, head_dim)
         )
 
@@ -208,9 +208,13 @@ class FeedForward(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         # As in LLaMA: FFN_SwiGLU(x, W1, W2, W3) = (Swish(xW1) * xW3)W2
+        # Shape: (batch_size, seq_len, dim) -> (batch_size, seq_len, dim * 4) -> (batch_size, seq_len, hidden_dim)
         swish = F.silu(self.w1(x))
+        # Shape: (batch_size, seq_len, dim) -> (batch_size, seq_len, dim * 4) -> (batch_size, seq_len, hidden_dim)
         x_V = self.w3(x)
+        # Shape: (batch_size, seq_len, hidden_dim)
         x = swish * x_V
+        # Shape: (batch_size, seq_len, hidden_dim) -> (batch_size, seq_len, dim)
         x = self.w2(x)
 
         return x
@@ -235,8 +239,9 @@ class EncoderBlock(nn.Module):
     def forward(
         self, x: torch.Tensor, start_pos: int, freqs_complex: torch.Tensor
     ) -> torch.Tensor:
-        # Shape: (batch_size, seq_len, dim) + (batch_size, seq_len, dim) -> (batch_size, seq_len, dim)
+        # Shape: (batch_size, seq_len, dim) + (batch_size, 1, dim) -> (batch_size, seq_len, dim)
         h = x + self.attention(self.attention_norm(x), start_pos, freqs_complex)
+        # Shape: (batch_size, seq_len, dim) + (batch_size, seq_len, dim) -> (batch_size, seq_len, dim)
         out = h + self.feed_forward(self.ffn_norm(h))
 
         return out
@@ -246,7 +251,7 @@ class Transformer(nn.Module):
     def __init__(self, args: ModelArgs):
         super().__init__()
 
-        assert args.vocab_size != -1, "Vocab size must be set"
+        assert args.vocab_size != -1, "Vocabulary size must be set"
 
         self.args = args
         self.vocab_size = args.vocab_size
