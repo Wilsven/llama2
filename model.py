@@ -218,6 +218,7 @@ class FeedForward(nn.Module):
         x = self.w2(x)
 
         return x
+        # return self.w2(F.silu(self.w1(x)), self.w3(x))
 
 
 class EncoderBlock(nn.Module):
